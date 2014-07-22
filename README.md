@@ -47,3 +47,10 @@ If fftw library <code> libfftw3f.so or libfftw3f.a </code> are not present in st
 <pre><code>g_distMat -h
 </code></pre>
 ***
+
+###Ouput
+Output files contain values in two-dimensional matrix format. This type of file could be visualized with gnuplot as shown in following example:
+<pre><code>gnuplot> plot 'contact_map.dat' matrix with image
+</code></pre>
+Color of this plot could be easily changed as per the gnuplot manual.
+***
