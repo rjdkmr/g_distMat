@@ -149,12 +149,14 @@ real calc_min_dist (int resi, int *resndxA, int *natmresA, int resj, int *resndx
 	real dist=999.0, r;
 	int i, j,ii,jj;
 
+
 	for(i=0;i<natmresA[resi];i++)
 	{
 		ii = resndxA[resi] + i;
 		for(j=0;j<natmresB[resj];j++)
 		{
 			jj = resndxB[resj] + j;
+
 			r = ((x[ii][XX]-x[jj][XX])*(x[ii][XX]-x[jj][XX]))+
 			    ((x[ii][YY]-x[jj][YY])*(x[ii][YY]-x[jj][YY])) +
 			    ((x[ii][ZZ]-x[jj][ZZ])*(x[ii][ZZ]-x[jj][ZZ]));
@@ -165,6 +167,7 @@ real calc_min_dist (int resi, int *resndxA, int *natmresA, int resj, int *resndx
 				dist = r;
 		}
 	}
+
 	return dist;
 }
 
@@ -172,13 +175,11 @@ real calc_min_dist (int resi, int *resndxA, int *natmresA, int resj, int *resndx
 void init_ndx_distmat_grp_A(t_topology top, int *index, int isize)	{
 	int i=0, nres=0, prevres;
 
-	prevres = top.atoms.atom[index[0]].resind;
-	nres  = 1;
+	prevres = -1;
+	nres  = 0;
 
-	snew(distance_matrix.natmresA, nres);
-	distance_matrix.natmresA[nres-1] = 0;
-
-	snew(distance_matrix.resndxA, nres);
+	snew(distance_matrix.natmresA, 1);
+	snew(distance_matrix.resndxA, 1);
 
 	for(i=0;i<isize;i++)
 	{
@@ -208,13 +209,11 @@ void init_ndx_distmat_grp_A(t_topology top, int *index, int isize)	{
 void init_ndx_distmat_grp_B(t_topology top, int *index, int isize)	{
 	int i=0, nres=0, prevres;
 
-	prevres = top.atoms.atom[index[0]].resind;
-	nres  = 1;
+	prevres = -1;
+	nres  = 0;
 
-	snew(distance_matrix.natmresB, nres);
-	distance_matrix.natmresB[nres-1] = 0;
-
-	snew(distance_matrix.resndxB, nres);
+	snew(distance_matrix.natmresB, 1);
+	snew(distance_matrix.resndxB, 1);
 
 	for(i=0;i<isize;i++)
 	{
@@ -474,6 +473,7 @@ int gmx_distMat(int argc,char *argv[])
 	fVar = opt2FILE("-var", NFILE, fnm, "w");
 	fStd = opt2FILE("-std", NFILE, fnm, "w");
 	fCmap = opt2FILE("-cmap", NFILE, fnm, "w");
+
 
 	for(i=0; i<distance_matrix.nA; i++){
 		for(j=0; j<distance_matrix.nB; j++){
