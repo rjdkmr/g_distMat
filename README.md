@@ -3,17 +3,16 @@
 
 ###About
 
-This tool is similar to gromacs tool g_mdmat. It calculates average distance matrix and other related matrices between two atom-groups from molecular dynamics trajectory (GROMACS, NAMD or AMBER).
+This tool is similar to gromacs tool g_mdmat. It calculates average minimum-distance matrix and other related matrices between two atom-groups from molecular dynamics trajectory (GROMACS, NAMD or AMBER).
 
 This tool might be helpful to analyze binding interface in protein-protein, protein-ligand or other type of bio-molecular complexes.
 
 ##### Features
 
 * Average minimum residues-distance matrix between two atom-groups that may be identical or different.
-* Variance Matrix.
-* Standard Deviation matrix.
-* Fraction contact-map with the given cut-off distance.
-* Fast -- multi-threading to use more than one core of the multi-core processor.
+* Related Standard deviation and variance Matrix.
+* Contact-map (fraction of contacts over entire trajectory) for the given distance cut-off.
+* Parallel Calculation -- multi-threading to use more than one core of the multi-core processor.
 
 ***
 
@@ -36,7 +35,7 @@ make install
 </code></pre>
 
 Directory <code>/opt/gromacs</code> should contains <code>include</code> and <code> lib </code> directories. If these directories are in seprate locations, use followings:
-<pre><code>cmake ..  -DGMX_LIB=/path/to/lib -GMX_INCLUDE=/path/to/include -DCMAKE_INSTALL_PREFIX=/opt/g_distMat
+<pre><code>cmake ..  -DGMX_LIB=/path/to/lib -DGMX_INCLUDE=/path/to/include -DCMAKE_INSTALL_PREFIX=/opt/g_distMat
 </code></pre>
 
 If fftw library <code> libfftw3f.so or libfftw3f.a </code> are not present in standard locations:
