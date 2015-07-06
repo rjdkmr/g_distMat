@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 project(g_distMat C)
 
 set(g_distMat_MAJOR_VERSION 1)
-set(g_distMat_g_distMat_MINOR_VERSION 0)
+set(g_distMat_g_distMat_MINOR_VERSION 1)
 set(g_distMat_PATCH_VERSION 0)
 set(g_distMat_VERSION
   ${g_distMat_MAJOR_VERSION}.${g_distMat_g_distMat_MINOR_VERSION}.${g_distMat_PATCH_VERSION})
@@ -26,39 +26,45 @@ foreach(p LIB BIN INCLUDE CMAKE)
 	endif()
 endforeach()
 
-# set up include-directories
-include_directories(
-	"${g_distMat_SOURCE_DIR}"   # to find src/*.h
-	"${g_distMat_BINARY_DIR}")  # to find src/config.h	 
+# Cmake modules/macros are in a subdirectory to keep this file cleaner
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-# Checking GROMACS PAth
-if (NOT DEFINED GMX_PATH AND (NOT DEFINED GMX_LIB OR NOT DEFINED GMX_INCLUDE) )
-message(FATAL_ERROR "\nGromacs path is not defined.....\nUSE:\n -DGMX_PATH=/path/to/gromacs \nOR\n -DGMX_LIB=/path/to/gromacs/lib -DGMX_INCLUDE=/path/to/gromacs/include")
+##############################################################
+################### CHECKING GROMACS PATH ####################
+##############################################################
+find_package(GROMACS COMPONENTS "libgromacs")
+if (NOT GROMACS_FOUND)
+	message(STATUS "Continue checking for other Gromacs version library file")
+endif(NOT GROMACS_FOUND)
+
+if (NOT GROMACS_FOUND)
+	find_package(GROMACS COMPONENTS "libgmx")
+endif(NOT GROMACS_FOUND)
+
+if (NOT GROMACS_FOUND)
+	message(FATAL_ERROR "\nGromacs path is not defined.....\nUSE:\n -DGMX_PATH=/path/to/gromacs\n  or  \n export CMAKE_PREFIX_PATH=\"/path/to/gromacs\"\n" )
+endif(NOT GROMACS_FOUND)
+
+message(STATUS "Found Gromacs include directory: " ${GROMACS_INCLUDE_DIRS})
+
+if(${GROMACS_VERSION} VERSION_LESS "4.5.0")
+	message(FATAL_ERROR, "\n Not implemented for Gromacs version: ${GROMACS_VERSION} \n")
 endif()
 
+if(${GROMACS_VERSION} VERSION_EQUAL "5.0" OR ${GROMACS_VERSION} VERSION_GREATER "5.0")
+	set(HAVE_GROMACS50 TRUE)
+	add_definitions("-DHAVE_GROMACS50")
+  ENABLE_LANGUAGE(CXX)
+endif(${GROMACS_VERSION} VERSION_EQUAL "5.0" OR ${GROMACS_VERSION} VERSION_GREATER "5.0")
 
-if(DEFINED GMX_PATH)
-	set(GMX_INCLUDE "${GMX_PATH}/include")
-	set(GMX_LIB "${GMX_PATH}/lib")
-endif()
-
-include_directories("${GMX_INCLUDE}/gromacs")
-
-# Searching FFTW library
-find_library(LIBFFTW fftw3f HINTS ${FFTW_LIB})
-if(DEFINED LIBFFTW-NOTFOUND)
-message(FATAL_ERROR "\nFFTW library file libfftw3f.so or libfftw3f.a not found at standard location\nUSE:\n -DFFTW_LIB=/path/to/fftw3/lib")
-endif()
-
-# Searching GROMACS Library
-find_library(LIBGMX gmx HINTS ${GMX_LIB})
-find_library(LIBGMXANA gmxana HINTS ${GMX_LIB})
-find_library(LIBMD md HINTS ${GMX_LIB})
+include_directories( ${GROMACS_INCLUDE_DIRS} )
+add_definitions( ${GROMACS_DEFINITIONS} )
+##############################################################
 
 add_executable(g_distMat g_distMat.c)
-
-
-target_link_libraries(g_distMat m ${LIBFFTW} ${LIBGMX} ${LIBGMXANA} ${LIBMD} pthread dl)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+target_link_libraries(g_distMat ${GROMACS_LIBRARIES})
+if(HAVE_GROMACS50)
+  SET_TARGET_PROPERTIES(g_distMat PROPERTIES LINKER_LANGUAGE CXX)
+endif(HAVE_GROMACS50)
 
 install(TARGETS g_distMat DESTINATION "${INSTALL_BIN_DIR}" COMPONENT bin)

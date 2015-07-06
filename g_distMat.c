@@ -2,7 +2,7 @@
  * This file is part of g_distMat
  *
  * Author: Rajendra Kumar
- * Copyright (C) 2014  Rajendra Kumar
+ * Copyright (C) 2014-2015  Rajendra Kumar
  *
  * g_distMat is a free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,18 +38,38 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#ifdef HAVE_GROMACS50
 
-#include "vec.h"
-#include "typedefs.h"
-#include "filenm.h"
-#include "statutil.h"
-#include "futil.h"
-#include "gmx_fatal.h"
-#include "smalloc.h"
-#include "index.h"
-#include "tpxio.h"
-#include "rmpbc.h"
-#include "pbc.h"
+#include "gromacs/legacyheaders/typedefs.h"
+#include "gromacs/legacyheaders/gmx_fatal.h"
+#include "gromacs/legacyheaders/rmpbc.h"
+#include "gromacs/legacyheaders/pbc.h"
+#include "gromacs/legacyheaders/index.h"
+#include "gromacs/legacyheaders/macros.h"
+#include "gromacs/utility/smalloc.h"
+#include "gromacs/fileio/tpxio.h"
+#include "gromacs/fileio/trxio.h"
+#include "gromacs/fileio/filenm.h"
+#include "gromacs/fileio/futil.h"
+#include "gromacs/commandline/pargs.h"
+#include "gromacs/commandline/cmdlineinit.h"
+
+#else
+
+#include "gromacs/vec.h"
+#include "gromacs/typedefs.h"
+#include "gromacs/filenm.h"
+#include "gromacs/statutil.h"
+#include "gromacs/futil.h"
+#include "gromacs/gmx_fatal.h"
+#include "gromacs/smalloc.h"
+#include "gromacs/index.h"
+#include "gromacs/tpxio.h"
+#include "gromacs/rmpbc.h"
+#include "gromacs/pbc.h"
+
+#endif
+
 
 void *status;
 pthread_t *thread;
@@ -63,6 +83,7 @@ typedef struct {
 	real cutoff, **mean, **var, **cmap, **sumdist, **sumsqdist;
 	rvec *coord;
 	int nthreads;
+	gmx_bool b2ndTraj;
 } DIST_MAT;
 
 DIST_MAT distance_matrix;
@@ -71,11 +92,11 @@ void CopyRightMsg() {
 
     const char *copyright[] = {
             "                                                                        ",
-            "                           :-)  g_distMat (-:                           ",
+            "                       :-)  g_distMat (-:                               ",
             "                                                                        ",
-            "                         Author: Rajendra Kumar                         ",
+            "                     Author: Rajendra Kumar                             ",
             "                                                                        ",
-            "                    Copyright (C) 2014  Rajendra Kumar                  ",
+            "               Copyright (C) 2014-2015  Rajendra Kumar                  ",
             "                                                                        ",
             "                                                                        ",
             "g_distMat is a free software: you can redistribute it and/or modify     ",
@@ -103,7 +124,7 @@ void CopyRightMsg() {
             "NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS      ",
             "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.            ",
             "                                                                        ",
-            "                           :-)  g_distMat (-:                       ",
+            "                        :-)  g_distMat (-:                              ",
             "                                                                        ",
             "                                                                        "
     };
@@ -317,12 +338,20 @@ void *calculate_dist_mat_pthread (void *arg) {
 			 dist = calc_min_dist(i, distance_matrix.resndxA, distance_matrix.natmresA, j, distance_matrix.resndxB, distance_matrix.natmresB, distance_matrix.coord);
 			 pthread_mutex_lock(&dist_mutex);
 
-			 distance_matrix.sumdist[i][j] += dist;
+			 // For first trajectory
+			 if (!distance_matrix.b2ndTraj)		{
 
-			 distance_matrix.sumsqdist[i][j] += (dist*dist);
+				 distance_matrix.sumdist[i][j] += dist;
 
-			 if (dist <= distance_matrix.cutoff)
-				 distance_matrix.cmap[i][j]++;
+				 distance_matrix.sumsqdist[i][j] += (dist*dist);
+
+				 if (dist <= distance_matrix.cutoff)
+					 distance_matrix.cmap[i][j]++;
+			 }
+			 else	{
+				 distance_matrix.sumdist[i][j] += dist;
+				 distance_matrix.sumsqdist[i][j] += ( (distance_matrix.mean[i][j] - dist) * (distance_matrix.mean[i][j] - dist) );
+			 }
 
 			 pthread_mutex_unlock(&dist_mutex);
 		}
@@ -349,28 +378,51 @@ void calc_mean_var()	{
 	}
 }
 
+void calc_msd_2nd()	{
+	int i=0, j=0, n = distance_matrix.nframes;
+	real sum=0, sumsq=0;
+	for(i=0; i<distance_matrix.nA; i++){
+		for(j=0; j<distance_matrix.nB; j++){
+			sum = distance_matrix.sumdist[i][j];
+			sumsq = distance_matrix.sumsqdist[i][j];
+
+			distance_matrix.mean[i][j] = abs( (sum/n) - distance_matrix.mean[i][j] );
+			distance_matrix.var[i][j] = sumsq / n;
+
+		}
+
+	}
+}
+
+
 
 int gmx_distMat(int argc,char *argv[])
 {
 	const char *desc[] = {
 			"It calculates average minimum-distance matrix of residues between two atom-groups.",
 			"Simultaneously, it calculates variance  and standard-deviation matrices.",
-			"Also, it calculates fraction of contact-map over entire trajectory for the ",
-			"residues that are within a minimum distance of \"-ct\" option value.\n\n",
+			"Also, it calculates contact-frequency map over the trajectory for the ",
+			"residues that are within a minimum distance given by \"-ct\" option value.\n\n",
 			"To speed up the calculation, it uses all available cores of the CPU using",
-			"multi-threading. Number of threads/cores could be change by \"-nt\" option."
+			"multi-threading. Number of threads/cores could be change by \"-nt\" option.\n",
+			"\n To calculate distance variances or deviation (fluctuations) in a trajectory",
+			" with respect to average distances from another trajectory, use [-f traj_for_average.xtc] ",
+			" and [-f2 traj_for_variance.xtc]. The averages will be calculated from ",
+			"\"traj_for_average.xtc\". Subsequently, variances and deviation will be ",
+			"calculated for \"traj_for_variance.xtc\" with respect to previosly calculated averages.\n",
 	};
-	static real cutoff = 1.0;
+	static real cutoff = 0.4;
 	int NTHREADS = sysconf( _SC_NPROCESSORS_ONLN );
 	t_pargs pa[] = {
 			{ "-ct",   FALSE, etREAL, {&cutoff}, "cut-off distance (nm) for contact map" },
-			{ "-nt",  FALSE, etINT, {&NTHREADS}, "number of threads for multi-threading" }
+			{ "-nt",   FALSE, etINT, {&NTHREADS}, "number of threads for multi-threading" }
 	};
 
 	t_filenm   fnm[] = {
 			{ efTRX, "-f",  NULL, ffREAD },
 			{ efTPS, NULL,  NULL, ffREAD },
 			{ efNDX, NULL,  NULL, ffOPTRD },
+			{ efTRX, "-f2",  NULL, ffOPTRD },
 			{ efDAT, "-mean", "average", ffWRITE },
 			{ efDAT, "-var", "variance", ffOPTWR },
 			{ efDAT, "-std", "stdeviation", ffOPTWR },
@@ -430,7 +482,15 @@ int gmx_distMat(int argc,char *argv[])
 	init_outdata_distmat();
 
 	trxnat=read_first_x(oenv, &trjstatus,ftp2fn(efTRX,NFILE,fnm), &time, &distance_matrix.coord, box);
+
+#ifdef HAVE_GROMACS50
+	gpbc = gmx_rmpbc_init(&top.idef, ePBC, trxnat);
+#else
 	gpbc = gmx_rmpbc_init(&top.idef,ePBC,trxnat,box);
+#endif
+
+
+	thread = malloc(sizeof(pthread_t) * NTHREADS);
 
 	do {
 		distance_matrix.nframes++;
@@ -440,7 +500,6 @@ int gmx_distMat(int argc,char *argv[])
 			//make_thread_index();
 			//exit(1);
 
-			thread = malloc(sizeof(pthread_t) * NTHREADS);
 			pthread_attr_init(&attr);
 			pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 			pthread_mutex_init(&dist_mutex, NULL);
@@ -463,16 +522,82 @@ int gmx_distMat(int argc,char *argv[])
 		else
 			calculate_dist_mat();
 
+#ifdef HAVE_GROMACS50
+	}while (read_next_x(oenv,trjstatus, &time, distance_matrix.coord, box));
+#else
 	}while (read_next_x(oenv,trjstatus, &time, trxnat, distance_matrix.coord, box));
+#endif
 
 	// Final calculation of average, var, std-deviation and contact-map
 	calc_mean_var();
+
+	// For 2nd trajectory /////////////////////////////////
+	fprintf(stdout, "\nReading second trajectory ...\n");
+	if (opt2fn_null("-f2", NFILE, fnm) != NULL )
+		distance_matrix.b2ndTraj = TRUE;
+
+	if (distance_matrix.b2ndTraj)	{
+
+		for(i=0; i<distance_matrix.nA; i++)	{
+			for(j=0; j<distance_matrix.nB; j++)	{
+				distance_matrix.sumdist[i][j] = 0;
+				distance_matrix.sumsqdist[i][j] = 0;
+			}
+		}
+
+		trxnat=read_first_x(oenv, &trjstatus,opt2fn_null("-f2", NFILE, fnm), &time, &distance_matrix.coord, box);
+#ifdef HAVE_GROMACS50
+		gpbc = gmx_rmpbc_init(&top.idef, ePBC, trxnat);
+#else
+		gpbc = gmx_rmpbc_init(&top.idef,ePBC,trxnat,box);
+#endif
+
+		do {
+
+			if(NTHREADS>1)	{
+
+				//make_thread_index();
+				//exit(1);
+
+				pthread_attr_init(&attr);
+				pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+				pthread_mutex_init(&dist_mutex, NULL);
+
+				for(nt=0;nt<NTHREADS;nt++)
+					ithread = pthread_create(&thread[nt],&attr, calculate_dist_mat_pthread, (void *) nt);
+					//mi_calculate((void *)&i);
+
+				 //Free attribute and wait for the other threads
+				pthread_attr_destroy(&attr);
+				for(nt=0; nt<NTHREADS; nt++) {
+					ithread = pthread_join(thread[nt], &status);
+					if (ithread) {
+						printf("ERROR; return code from pthread_join() is %d\n", ithread);
+						exit(-1);
+					 }
+				 }
+			}
+
+			else
+				calculate_dist_mat();
+
+#ifdef HAVE_GROMACS50
+		}while (read_next_x(oenv,trjstatus, &time, distance_matrix.coord, box));
+#else
+		}while (read_next_x(oenv,trjstatus, &time, trxnat, distance_matrix.coord, box));
+#endif
+
+	}
+	//////////////////////////////////////////////////////////
+
 
 	//Writing output file
 	fMean = opt2FILE("-mean", NFILE, fnm, "w");
 	fVar = opt2FILE("-var", NFILE, fnm, "w");
 	fStd = opt2FILE("-std", NFILE, fnm, "w");
-	fCmap = opt2FILE("-cmap", NFILE, fnm, "w");
+
+	if (!distance_matrix.b2ndTraj)
+		fCmap = opt2FILE("-cmap", NFILE, fnm, "w");
 
 
 	for(i=0; i<distance_matrix.nA; i++){
@@ -480,19 +605,30 @@ int gmx_distMat(int argc,char *argv[])
 			fprintf(fMean, "%5.3f ", distance_matrix.mean[i][j]);
 			fprintf(fVar, "%5.3f ", distance_matrix.var[i][j]);
 			fprintf(fStd, "%5.3f ", sqrt(distance_matrix.var[i][j]));
-			fprintf(fCmap, "%5.3f ", distance_matrix.cmap[i][j]);
+
+			if (!distance_matrix.b2ndTraj)
+				fprintf(fCmap, "%5.3f ", distance_matrix.cmap[i][j]);
 		}
 		fprintf(fMean,"\n");
 		fprintf(fVar,"\n");
 		fprintf(fStd,"\n");
-		fprintf(fCmap,"\n");
+
+		if (!distance_matrix.b2ndTraj)
+			fprintf(fCmap,"\n");
 	}
 
 	fprintf(stdout, "\n\nThanks for using g_distMat!!!\n");
 	return 0;
 }
 
+#ifdef HAVE_GROMACS50
+int main (int argc,char *argv[])	{
+	gmx_run_cmain(argc,argv, &gmx_distMat);
+	return 0;
+}
+#else
 int main (int argc,char *argv[])	{
 	gmx_distMat(argc,argv);
 	return 0;
 }
+#endif
