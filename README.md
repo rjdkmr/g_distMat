@@ -1,7 +1,6 @@
-##g_distMat
-***
+## g_distMat
 
-###About
+### About
 
 This tool is similar to gromacs tool g_mdmat. It calculates average minimum-distance matrix and other related matrices between two atom-groups from molecular dynamics trajectory (GROMACS, NAMD or AMBER).
 
@@ -15,40 +14,43 @@ This tool might be helpful to analyze binding interface in protein-protein, prot
 * Parallel Calculation -- multi-threading to use more than one core of the multi-core processor.
 * Compare fluctuations in two different trajectory
 
-***
 
-###Requirements
-**Gromacs versions supported**: 4.5.x, 4.6.x and 5.0.x
+### Requirements
+**Gromacs versions supported**: 4.5.x, 4.6.x, 5.0.x, 5.1.x and 2016.x
 
-To compile and install, GROMACS libraries <code> libgmx (v4.5.x/v4.6.x) </code> or <code> libgromacs (v5.0.x) </code> are required.
-***
+To compile and install, GROMACS libraries ``libgmx.a(.so)`` (v4.5.x/v4.6.x) or ``libgromacs.a(.so)`` (v5.0.x/v5.1.x/v2016.x) are required.
 
-###Download
-<pre><code>git clone https://github.com/rjdkmr/g_distMat
-</code></pre>
-***
 
-###Installation
-<pre><code>cd g_distMat
+### Download
+```bash
+git clone https://github.com/rjdkmr/g_distMat
+```
+
+
+### Installation
+
+```bash
+cd g_distMat
 mkdir build
 cd build
 cmake ..  -DGMX_PATH=/opt/gromacs -DCMAKE_INSTALL_PREFIX=/opt/g_distMat
 make
 make install
-</code></pre>
+```
 
-Directory <code>/opt/gromacs</code> should contains <code>include</code> and <code> lib </code> directories. 
+Directory <code>/opt/gromacs</code> should contains <code>include</code> and <code> lib </code> directories.
 
 If fftw library <code> libfftw3f.so or libfftw3f.a </code> are not present in standard locations:
-<pre><code>-DFFTW_LIB=/path/to/fftw3/lib</code></pre>
-***
+```bash
+-DFFTW_LIB=/path/to/fftw3/lib
+```
 
-###Usage
-<pre><code>g_distMat -h
-</code></pre>
-***
+### Usage
+```bash
+g_distMat -h
+```
 
-###Description
+### Description
 
 It calculates average minimum-distance matrix of residues between two
 atom-groups. Simultaneously, it calculates variance  and standard-deviation
@@ -59,13 +61,16 @@ To speed up the calculation, it uses all available cores of the CPU using
 multi-threading. Number of threads/cores could be change by "-nt" option.
 
 To calculate distance variances or deviation (fluctuations) in a trajectory
-with respect to average distances from another trajectory, use [-f traj_for_average.xtc]  and [-f2 traj_for_variance.xtc]. The averages will be
+with respect to average distances from another trajectory, use [-f traj_for_average.xtc]  
+and [-f2 traj_for_variance.xtc]. The averages will be
 calculated from "traj_for_average.xtc". Subsequently, variances and deviation
 will be calculated for "traj_for_variance.xtc" with respect to previosly
 calculated averages.
 
-###Options
-<pre><code>
+### Options
+
+```
+
 Option     Filename  Type         Description
 ------------------------------------------------------------
   -f       traj.xtc  Input        Trajectory: xtc trr trj gro g96 pdb cpt
@@ -88,11 +93,12 @@ Option       Type   Value   Description
 -ct          real   0.4     cut-off distance (nm) for contact map
 -nt          int    8       number of threads for multi-threading
 
-</code></pre>
+```
 
-###Ouput
+### Ouput
 Output files contain values in two-dimensional matrix format. This type of file could be visualized with gnuplot as shown in following example:
-<pre><code>gnuplot> plot 'contact_map.dat' matrix with image
-</code></pre>
+
+```
+gnuplot> plot 'contact_map.dat' matrix with image
+```
 Color of this plot could be easily changed as per the gnuplot manual.
-***

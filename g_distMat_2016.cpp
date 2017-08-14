@@ -32,59 +32,28 @@
  *
  */
 
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 #include <pthread.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <unistd.h>
 
-#ifdef HAVE_GROMACS50
-
-#include "gromacs/legacyheaders/typedefs.h"
-#include "gromacs/legacyheaders/gmx_fatal.h"
-#include "gromacs/legacyheaders/rmpbc.h"
-#include "gromacs/legacyheaders/pbc.h"
-#include "gromacs/legacyheaders/index.h"
-#include "gromacs/legacyheaders/macros.h"
-#include "gromacs/utility/smalloc.h"
-#include "gromacs/fileio/tpxio.h"
-#include "gromacs/fileio/trxio.h"
-#include "gromacs/fileio/filenm.h"
-#include "gromacs/fileio/futil.h"
+#include "gromacs/commandline/viewit.h"
+#include "gromacs/utility/futil.h"
+#include "gromacs/commandline/filenm.h"
 #include "gromacs/commandline/pargs.h"
 #include "gromacs/commandline/cmdlineinit.h"
-
-#elif HAVE_GROMACS51
-
-#include "gromacs/legacyheaders/typedefs.h"
-#include "gromacs/legacyheaders/macros.h"
-#include "gromacs/legacyheaders/oenv.h"
-#include "gromacs/utility/fatalerror.h"
+#include "gromacs/fileio/oenv.h"
+#include "gromacs/fileio/tpxio.h"
+#include "gromacs/fileio/trxio.h"
+#include "gromacs/fileio/confio.h"
+#include "gromacs/utility/arraysize.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/utility/fatalerror.h"
+#include "gromacs/topology/atoms.h"
+#include "gromacs/topology/topology.h"
 #include "gromacs/topology/index.h"
 #include "gromacs/pbcutil/rmpbc.h"
-#include "gromacs/fileio/tpxio.h"
-#include "gromacs/fileio/trxio.h"
-#include "gromacs/fileio/filenm.h"
-#include "gromacs/commandline/pargs.h"
-#include "gromacs/commandline/cmdlineinit.h"
-
-#else
-
-#include "gromacs/vec.h"
-#include "gromacs/typedefs.h"
-#include "gromacs/filenm.h"
-#include "gromacs/statutil.h"
-#include "gromacs/futil.h"
-#include "gromacs/gmx_fatal.h"
-#include "gromacs/smalloc.h"
-#include "gromacs/index.h"
-#include "gromacs/tpxio.h"
-#include "gromacs/rmpbc.h"
-#include "gromacs/pbc.h"
-
-#endif
-
 
 void *status;
 pthread_t *thread;
@@ -443,14 +412,15 @@ int gmx_distMat(int argc,char *argv[])
 			{ efDAT, "-std", "stdeviation", ffOPTWR },
 			{ efDAT, "-cmap", "contact_map", ffOPTWR }
 	};
-#define NFILE asize(fnm)
+
+	#define NFILE asize(fnm)
 
 	FILE *fMean, *fVar, *fStd, *fCmap;
 	t_topology top;
 	int ePBC;
 
 	int isizeA, isizeB;
-	atom_id *indexA, *indexB;
+	int *indexA, *indexB;
 	char *grpnameA, *grpnameB;
 
 	int i, j, trxnat;
@@ -461,25 +431,16 @@ int gmx_distMat(int argc,char *argv[])
 
 	real time;
 	matrix box;
-	output_env_t oenv;
+	gmx_output_env_t *oenv;
 	gmx_rmpbc_t gpbc = NULL;
 
 	// Copyright message
 	CopyRightMsg();
 
 	// Parse command line argument and print all options
-	#ifdef HAVE_GROMACS50
 		if ( ! parse_common_args(&argc,argv,PCA_CAN_TIME,NFILE,fnm,asize(pa),pa,asize(desc),desc,0,NULL,&oenv) )	{
 			return 0;
 		}
-	#elif HAVE_GROMACS51
-		if ( ! parse_common_args(&argc,argv,PCA_CAN_TIME,NFILE,fnm,asize(pa),pa,asize(desc),desc,0,NULL,&oenv) )	{
-			return 0;
-		}
-	#else
-		parse_common_args(&argc,argv,PCA_CAN_TIME,NFILE,fnm,asize(pa),pa,asize(desc),desc,0,NULL,&oenv);
-	#endif
-
 
 	// Set number of threads
 	set_num_threads(NTHREADS);
@@ -488,7 +449,7 @@ int gmx_distMat(int argc,char *argv[])
 	distance_matrix.cutoff = cutoff;
 
 	// Reading tpr filr
-	read_tps_conf(ftp2fn(efTPS,NFILE,fnm),title,&top,&ePBC,&x,NULL,box,FALSE);
+	read_tps_conf(ftp2fn(efTPS,NFILE,fnm), &top, &ePBC, &x, NULL, box, FALSE);
 
 	// Selection of first index group
 	fprintf(stderr,"Select first group:\n");
@@ -509,16 +470,9 @@ int gmx_distMat(int argc,char *argv[])
 
 	trxnat=read_first_x(oenv, &trjstatus,ftp2fn(efTRX,NFILE,fnm), &time, &distance_matrix.coord, box);
 
-#ifdef HAVE_GROMACS50
 	gpbc = gmx_rmpbc_init(&top.idef, ePBC, trxnat);
-#elif HAVE_GROMACS51
-	gpbc = gmx_rmpbc_init(&top.idef, ePBC, trxnat);
-#else
-	gpbc = gmx_rmpbc_init(&top.idef,ePBC,trxnat,box);
-#endif
 
-
-	thread = malloc(sizeof(pthread_t) * NTHREADS);
+	thread = (pthread_t *) malloc(sizeof(pthread_t) * NTHREADS);
 
 	do {
 		distance_matrix.nframes++;
@@ -550,13 +504,7 @@ int gmx_distMat(int argc,char *argv[])
 		else
 			calculate_dist_mat();
 
-#ifdef HAVE_GROMACS50
 	}while (read_next_x(oenv,trjstatus, &time, distance_matrix.coord, box));
-#elif HAVE_GROMACS51
-	}while (read_next_x(oenv,trjstatus, &time, distance_matrix.coord, box));
-#else
-	}while (read_next_x(oenv,trjstatus, &time, trxnat, distance_matrix.coord, box));
-#endif
 
 	// Final calculation of average, var, std-deviation and contact-map
 	calc_mean_var();
@@ -577,13 +525,7 @@ int gmx_distMat(int argc,char *argv[])
 		}
 
 		trxnat=read_first_x(oenv, &trjstatus,opt2fn_null("-f2", NFILE, fnm), &time, &distance_matrix.coord, box);
-#ifdef HAVE_GROMACS50
 		gpbc = gmx_rmpbc_init(&top.idef, ePBC, trxnat);
-#elif HAVE_GROMACS51
-	gpbc = gmx_rmpbc_init(&top.idef, ePBC, trxnat);
-#else
-		gpbc = gmx_rmpbc_init(&top.idef,ePBC,trxnat,box);
-#endif
 
 		do {
 
@@ -614,14 +556,7 @@ int gmx_distMat(int argc,char *argv[])
 			else
 				calculate_dist_mat();
 
-#ifdef HAVE_GROMACS50
 		}while (read_next_x(oenv,trjstatus, &time, distance_matrix.coord, box));
-#elif HAVE_GROMACS51
-		}while (read_next_x(oenv,trjstatus, &time, distance_matrix.coord, box));
-#else
-		}while (read_next_x(oenv,trjstatus, &time, trxnat, distance_matrix.coord, box));
-#endif
-
 	}
 	//////////////////////////////////////////////////////////
 
@@ -656,24 +591,8 @@ int gmx_distMat(int argc,char *argv[])
 	return 0;
 }
 
-#ifdef HAVE_GROMACS50
 
 int main (int argc,char *argv[])	{
 	gmx_run_cmain(argc,argv, &gmx_distMat);
 	return 0;
 }
-
-#elif HAVE_GROMACS51
-
-int main (int argc,char *argv[])	{
-	gmx_run_cmain(argc,argv, &gmx_distMat);
-	return 0;
-}
-
-#else
-
-int main (int argc,char *argv[])	{
-	gmx_distMat(argc,argv);
-	return 0;
-}
-#endif

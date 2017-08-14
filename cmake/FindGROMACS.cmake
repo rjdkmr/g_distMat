@@ -60,8 +60,6 @@ foreach(_dir $ENV{CMAKE_PREFIX_PATH})
 	# In gormacs 5.0 and later
 	if(IS_DIRECTORY "${_dir}/${CMAKE_INSTALL_LIBDIR}/pkgconfig/")
 		set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${_dir}/${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-		set(HAVE_GROMACS50 TRUE)
-		ADD_DEFINITIONS(-DHAVE_GROMACS50)
 	endif()
 endforeach()
 #########################################################################
@@ -114,19 +112,18 @@ set(GROMACS_DEFINITIONS "${GMX_DEFS}" CACHE STRING "extra GROMACS definitions")
 
 find_library(GROMACS_LIBRARY NAMES ${GROMACS_LIBRARY_NAME} HINTS ${PC_GROMACS_LIBRARY_DIRS} ${PC_GROMACS_STATIC_LIBRARY_DIRS} )
 if (GROMACS_LIBRARY)
-	if("${GROMACS_LIBRARY}" MATCHES "lib(gmx|gromacs)[^;]*(\\.a|\\.so)")
-		
-		if(PC_GROMACS_LIBRARIES)
-			list(REMOVE_ITEM PC_GROMACS_LIBRARIES ${GROMACS_LIBRARY_NAME})
+  if("${GROMACS_LIBRARY}" MATCHES "lib(gmx|gromacs)[^;]*(\\.a|\\.so)")
+    if(PC_GROMACS_LIBRARIES)
+      list(REMOVE_ITEM PC_GROMACS_LIBRARIES ${GROMACS_LIBRARY_NAME})
       foreach (LIB ${PC_GROMACS_LIBRARIES})
-        #find_library(GROMACS_${LIB} ${LIB} HINTS ${PC_GROMACS_LIBRARY_DIRS})
-        #message("${GROMACS_${LIB}}")
-				#list(APPEND GMX_DEP_LIBRARIES ${GROMACS_${LIB}})
-				list(APPEND GMX_DEP_LIBRARIES "-l${LIB}")
+        find_library(GROMACS_${LIB} ${LIB} HINTS ${PC_GROMACS_LIBRARY_DIRS})
+        if(GROMACS_${LIB})
+					list(APPEND GMX_DEP_LIBRARIES ${GROMACS_${LIB}})
+				endif(GROMACS_${LIB})
+				#list(APPEND GMX_DEP_LIBRARIES "-l${LIB}")
         unset(GROMACS_${LIB} CACHE)
       endforeach(LIB)
     endif(PC_GROMACS_LIBRARIES)
-
     if(PC_GROMACS_CFLAGS_OTHER)
       foreach(LIB ${PC_GROMACS_CFLAGS_OTHER})
         if (${LIB} MATCHES "thread")
@@ -147,13 +144,14 @@ if (GROMACS_LIBRARY)
 			ENDFOREACH()
 		endif("${GROMACS_LIBRARY}" MATCHES "lib(gmx|gromacs)[^;]*(\\.so)")
 
-		if( NOT ("${GMX_DEP_LIBRARIES}" MATCHES "-lm") )
-			list(APPEND GMX_DEP_LIBRARIES "-lm")
-		endif(NOT ("${GMX_DEP_LIBRARIES}" MATCHES "-lm") )
 
 		if( NOT ("${GMX_DEP_LIBRARIES}" MATCHES "pthread") AND "${PC_GROMACS_STATIC_LIBRARIES}" MATCHES "pthread")
 			 list(APPEND GMX_DEP_LIBRARIES "-lpthread")
 		endif(NOT ("${GMX_DEP_LIBRARIES}" MATCHES "pthread") AND "${PC_GROMACS_STATIC_LIBRARIES}" MATCHES "pthread")
+
+		if( NOT ("${GMX_DEP_LIBRARIES}" MATCHES "libm|-lm") )
+			list(APPEND GMX_DEP_LIBRARIES "-lm")
+		endif(NOT ("${GMX_DEP_LIBRARIES}" MATCHES "libm|-lm") )
 
 		if( NOT ("${GMX_DEP_LIBRARIES}" MATCHES "dl") AND "${PC_GROMACS_STATIC_LIBRARIES}" MATCHES "dl")
 			list(APPEND GMX_DEP_LIBRARIES "-ldl")
@@ -189,21 +187,27 @@ if (GROMACS_LIBRARY)
 				message(STATUS "Found z library: ${ZLIB}")
 				list(APPEND GMX_DEP_LIBRARIES ${ZLIB})
 			else(ZLIB)
-				message(WARNING "libz.a or libz.so not found. In case of incoming compilation error:\n  undefined reference to `uncompress'\n,  use: -DZLIB_PATH=/path/to/zlib.a(so).\n")
+				message(WARNING "libz.a or libz.so not found.\n In case of FUTURE ERROR: undefined reference to `uncompress',\n  Use: -DZLIB_PATH=/path/to/zlib.a(so).\n")
 			endif(ZLIB)
 		endif(${PC_GROMACS_VERSION} VERSION_EQUAL "5.0" OR ${PC_GROMACS_VERSION} VERSION_GREATER "5.0")
 
 
-    set(GROMACS_DEP_LIBRARIES "${GMX_DEP_LIBRARIES}" CACHE FILEPATH "GROMACS depency libs (only needed for static (.a) ${GROMACS_LIBRARY}")
+    set(GROMACS_DEP_LIBRARIES "${GMX_DEP_LIBRARIES}" CACHE FILEPATH "GROMACS dependency libs (only needed for static (.a) ${GROMACS_LIBRARY}")
+
   endif("${GROMACS_LIBRARY}" MATCHES "lib(gmx|gromacs)[^;]*(\\.a|\\.so)")
 
-	# Getting Gromacs version
-	set(GROMACS_VERSION "${PC_GROMACS_VERSION}")
-	string(REPLACE "." ";" VERSION_LIST ${GROMACS_VERSION})
-	list(GET VERSION_LIST 0 GROMACS_MAJOR_VERSION)
-	list(GET VERSION_LIST 1 GROMACS_MINOR_VERSION)
-	list(GET VERSION_LIST 2 GROMACS_PATCH_LEVEL)
-	set(GROMACS_VERSION_STRING "${GROMACS_VERSION}")
+  # Getting Gromacs version
+  set(GROMACS_VERSION "${PC_GROMACS_VERSION}")
+  string(REPLACE "." ";" VERSION_LIST ${GROMACS_VERSION})
+  list(GET VERSION_LIST 0 GROMACS_MAJOR_VERSION)
+  list(GET VERSION_LIST 1 GROMACS_MINOR_VERSION)
+  list(LENGTH VERSION_LIST LEN_GMX_VER_LIST)
+  # Not available after 2016 versions
+  if (${LEN_GMX_VER_LIST} MATCHES "3")
+    list(GET VERSION_LIST 2 GROMACS_PATCH_LEVEL)
+  endif( ${LEN_GMX_VER_LIST} MATCHES "3" )
+
+  set(GROMACS_VERSION_STRING "${GROMACS_VERSION}")
 
 else(GROMACS_LIBRARY)
   set(GROMACS_VERSION "4.5.0")
