@@ -1,10 +1,11 @@
-## g_distMat
 
 ### This tool is moved to <code>[gmx_clusterByFeatures](https://gmx-clusterbyfeatures.readthedocs.io/)</code> as sub-command <code>[distmat](https://gmx-clusterbyfeatures.readthedocs.io/en/latest/commands/distmat.html)</code>.
 
 **<code>[gmx_clusterByFeatures](https://gmx-clusterbyfeatures.readthedocs.io/)</code>** is easy to install by one command: **``sudo pip3 install gmx-clusterByFeatures``**. **<code>[distmat](https://gmx-clusterbyfeatures.readthedocs.io/en/latest/commands/distmat.html)</code>** command is same as **``g_distMat``**. **HELP** and **USAGE** for **``distmat``** is provided in this **[link](https://gmx-clusterbyfeatures.readthedocs.io/en/latest/commands/distmat.html)**. Moreover, **<code>[gmx_clusterByFeatures](https://gmx-clusterbyfeatures.readthedocs.io/en/latest/usage.html)</code>** include **[``matplot``](https://gmx-clusterbyfeatures.readthedocs.io/en/latest/commands/matplot.html)**, which can be used to plot the data obtained from **<code>[distmat](https://gmx-clusterbyfeatures.readthedocs.io/en/latest/commands/distmat.html)</code>**.
 
 ***
+
+## g_distMat
 
 ### About
 
